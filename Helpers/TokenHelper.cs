@@ -9,7 +9,7 @@ namespace TaskApi.Helpers
     {
         public static readonly string Issuer = "https://sutkt.ru/";
         public static readonly string Audience = "https://sutkt.ru/";
-        public static readonly string Secret = "pOGX06VuVZLRPef0ty09jCqK4uZufDa6LP4n8Gj+8hQPB30f94pFiECAnPeMi5N6VT3/uscoGH7+ZJv4AuuPg==";
+        public static string Secret = "VGhpcyBpcyBhIHN1cGVyIHNlY3JldCBrZXkgZm9yIEpXVCAhISEhISE=";
 
         public static async Task<string> GenerateAccessTokenAsync(int userId)
         {

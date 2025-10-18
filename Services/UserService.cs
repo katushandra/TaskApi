@@ -44,7 +44,7 @@ namespace TaskApi.Services
                 };
             }
 
-            var token = await System.Threading.Tasks.Task.Run(()=>tokenService.GenerateTokenAsync(user.Id));
+            var token = await System.Threading.Tasks.Task.Run(() => tokenService.GenerateTokenAsync(user.Id));
             return new TokenResponse
             {
                 Success = true,
@@ -123,7 +123,7 @@ namespace TaskApi.Services
                 FirstName = signupRequest.FirstName,
                 LastName = signupRequest.LastName,
                 Ts = DateTime.Now,
-                IsActive = true 
+                IsActive = true
             };
 
             await tasksDbContext.Users.AddAsync(user);
