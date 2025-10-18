@@ -1,9 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
 using TaskApi.Data;
 using TaskApi.Data.Entities;
 using TaskApi.Data.Requests;
@@ -24,139 +19,83 @@ namespace TaskApi.Services
 
         public async Task<Tuple<string, string>> GenerateTokenAsync(int userId)
         {
-            var accessToken = await TokenHelper.GenerateAccessToken(userId);
+            var accessToken = await TokenHelper.GenerateAccessTokenAsync(userId);
             var refreshToken = await TokenHelper.GenerateRefreshToken();
-            var userRecord = await tasksDbContext.Users.Include(O => O.RefreshTokens),
+            var userRecord = await tasksDbContext.Users.Include(O => O.RefreshTokens).FirstOrDefaultAsync(e => e.Id == userId);
 
- }
+            if (userRecord != null)
+            {
+                return null;
+            }
+            var salt = PasswordHelper.GetSecureSalt();
+            var refreshTokenHashed = PasswordHelper.HashUsingPbkdf2(refreshToken, salt);
 
+            if (userRecord.RefreshTokens != null && userRecord.RefreshTokens.Any())
+            {
+                await RemoveRefreshTokenAsync(userRecord);
+            }
+
+            userRecord.RefreshTokens?.Add(new RefreshToken
+            {
+                ExpiryDate = DateTime.Now.AddDays(30),
+                Ts = DateTime.Now,
+                UserId = userId,
+                TokenHash = refreshTokenHashed,
+                TokenSalt = Convert.ToBase64String(salt)
+            });
+            await tasksDbContext.SaveChangesAsync();
+            var token = new Tuple<string, string>(accessToken, refreshTokenHashed);
+            return token;
+        }
+
+        public async Task<bool> RemoveRefreshTokenAsync(User user)
+        {
+            var userRecord = await tasksDbContext.Users.Include(o => o.RefreshTokens).FirstOrDefaultAsync(e => e.Id == user.Id);
+
+            if (userRecord == null)
+            {
+                return false;
+            }
+
+            if (userRecord.RefreshTokens != null && userRecord.RefreshTokens.Any())
+            {
+                var currentRefreshToken = userRecord.RefreshTokens.First();
+                tasksDbContext.RefreshTokens.Remove(currentRefreshToken);
+            }
+            return false;
+        }
         public async Task<ValidateRefreshTokenResponse> ValidateRefreshTokenAsync(RefreshTokenRequest refreshTokenRequest)
         {
-            var refreshToken = await _tasksDbContext.RefreshTokens
-                .FirstOrDefaultAsync(rt => rt.UserId == refreshTokenRequest.UserId);
+            var refreshToken = await tasksDbContext.RefreshTokens.FirstOrDefaultAsync(rt => rt.UserId == refreshTokenRequest.UserId);
+            var response = new ValidateRefreshTokenResponse();
 
             if (refreshToken == null)
             {
-                return new ValidateRefreshTokenResponse
-                {
-                    Success = false,
-                    Error = "Invalid refresh token",
-                    ErrorCode = "R01"
-                };
+                response.Success = false;
+                response.Error = "Invalid session or user already logged out";
+                response.ErrorCode = "R02";
+
+            }
+            var refreshTokenToValidateHash = PasswordHelper.HashUsingPbkdf2(refreshTokenRequest.RefreshToken, Convert.FromBase64String(refreshToken.TokenSalt));
+
+            if (refreshToken.TokenHash != refreshTokenToValidateHash)
+            {
+                response.Success = false;
+                response.Error = "Invalid refresh token";
+                response.ErrorCode = "R03";
+
             }
 
-            // Хешируем полученный refresh token для сравнения с сохраненным в БД
-            var hashedRefreshToken = HashRefreshToken(refreshTokenRequest.RefreshToken);
-
-            if (refreshToken.TokenHash != hashedRefreshToken)
+            if (refreshToken.ExpiryDate < DateTime.Now)
             {
-                return new ValidateRefreshTokenResponse
-                {
-                    Success = false,
-                    Error = "Invalid refresh token",
-                    ErrorCode = "R02"
-                };
+                response.Success = false;
+                response.Error = "Refresh token has expired";
+                response.ErrorCode = "R04";
             }
 
-            if (refreshToken.ExpiryDate < DateTime.UtcNow)
-            {
-                return new ValidateRefreshTokenResponse
-                {
-                    Success = false,
-                    Error = "Refresh token expired",
-                    ErrorCode = "R03"
-                };
-            }
-
-            return new ValidateRefreshTokenResponse
-            {
-                Success = true,
-                UserId = refreshTokenRequest.UserId
-            };
-        }
-
-        private string GenerateAccessToken(int userId)
-        {
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(TokenHelper.Secret);
-
-            var tokenDescriptor = new SecurityTokenDescriptor
-            {
-                Subject = new ClaimsIdentity(new[]
-                {
-                    new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-                    new Claim(ClaimTypes.Email, GetUserEmail(userId) ?? string.Empty)
-                }),
-                Expires = DateTime.UtcNow.AddMinutes(TokenHelper.AccessTokenExpirationMinutes),
-                Issuer = TokenHelper.Issuer,
-                Audience = TokenHelper.Audience,
-                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key),
-                    SecurityAlgorithms.HmacSha256Signature)
-            };
-
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-            return tokenHandler.WriteToken(token);
-        }
-
-        private string GenerateRefreshToken()
-        {
-            var randomNumber = new byte[32];
-            using var rng = RandomNumberGenerator.Create();
-            rng.GetBytes(randomNumber);
-            return Convert.ToBase64String(randomNumber);
-        }
-
-        private async Task SaveRefreshTokenAsync(int userId, string refreshToken)
-        {
-            // Удаляем старый refresh token если существует
-            var existingToken = await _tasksDbContext.RefreshTokens
-                .FirstOrDefaultAsync(rt => rt.UserId == userId);
-
-            if (existingToken != null)
-            {
-                _tasksDbContext.RefreshTokens.Remove(existingToken);
-            }
-
-            // Сохраняем новый refresh token
-            var refreshTokenEntity = new RefreshToken
-            {
-                UserId = userId,
-                TokenHash = HashRefreshToken(refreshToken),
-                ExpiryDate = DateTime.UtcNow.AddDays(TokenHelper.RefreshTokenExpirationDays),
-                CreatedDate = DateTime.UtcNow
-            };
-
-            await _tasksDbContext.RefreshTokens.AddAsync(refreshTokenEntity);
-            await _tasksDbContext.SaveChangesAsync();
-        }
-
-        private string HashRefreshToken(string refreshToken)
-        {
-            using var sha256 = SHA256.Create();
-            var bytes = Encoding.UTF8.GetBytes(refreshToken);
-            var hash = sha256.ComputeHash(bytes);
-            return Convert.ToBase64String(hash);
-        }
-
-        private string? GetUserEmail(int userId)
-        {
-            var user = _tasksDbContext.Users.Find(userId);
-            return user?.Email;
-        }
-
-        public async Task<bool> RevokeRefreshTokenAsync(int userId)
-        {
-            var refreshToken = await _tasksDbContext.RefreshTokens
-                .FirstOrDefaultAsync(rt => rt.UserId == userId);
-
-            if (refreshToken != null)
-            {
-                _tasksDbContext.RefreshTokens.Remove(refreshToken);
-                var result = await _tasksDbContext.SaveChangesAsync();
-                return result > 0;
-            }
-
-            return true; // Если токена нет, считаем что отзыв успешен
+            response.Success = true;
+            response.UserId = refreshTokenRequest.UserId;
+            return response;
         }
     }
 }

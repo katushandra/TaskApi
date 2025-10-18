@@ -15,18 +15,18 @@ namespace TaskApi.Helpers
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Convert.FromBase64String(Secret);
-
-            var claims = new[]
+            var claimsIdentity = new ClaimsIdentity(new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, userId.ToString())
-            };
+            });
+
             var signingCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature);
             var tokenDescriptor = new SecurityTokenDescriptor
             {
-                Subject = new ClaimsIdentity(claims),
+                Subject = new ClaimsIdentity(claimsIdentity),
                 Issuer = Issuer,
                 Audience = Audience,
-                Expires = DateTime.UtcNow.AddMinutes(15),
+                Expires = DateTime.Now.AddMinutes(15),
                 SigningCredentials = signingCredentials,
             };
 

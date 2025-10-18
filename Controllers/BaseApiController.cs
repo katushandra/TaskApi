@@ -1,12 +1,21 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
 
 namespace TaskApi.Controllers
 {
-    public class BaseApiController : Controller
+    public class BaseApiController : ControllerBase
     {
-        public IActionResult Index()
+        protected int UserID => int.Parse(FindClaim(ClaimTypes.NameIdentifier));
+
+        private string FindClaim(string claimName)
         {
-            return View();
+            var claimsIdentity = HttpContext.User.Identity as ClaimsIdentity;
+            var claim = claimsIdentity.FindFirst(claimName);
+            if (claim == null)
+            {
+                return null;
+            }
+            return claim.Value;
         }
     }
 }

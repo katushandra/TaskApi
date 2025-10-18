@@ -97,7 +97,7 @@ namespace TaskApi.Services
                 return new SignupResponse
                 {
                     Success = false,
-                    Error = "Password and confirm password do not match"
+                    Error = "Password and confirm password do not match",
                     ErrorCode = "S03"
                 };
             }

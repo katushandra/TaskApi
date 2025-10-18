@@ -8,7 +8,6 @@ namespace TaskApi.Interfaces
     {
         Task<Tuple<string, string>> GenerateTokenAsync(int userId);
         Task<ValidateRefreshTokenResponse> ValidateRefreshTokenAsync(RefreshTokenRequest refreshTokenRequest);
-        Task<bool> ValidateRefreshTokenAsync(User user);
-
+        Task<bool> RemoveRefreshTokenAsync(User user);
     }
 }
