@@ -33,7 +33,7 @@ namespace TaskApi.Controllers
         [HttpPost]
         public async Task<IActionResult> Post(TaskRequest taskRequest)
         {
-            var task = new Data.Entities.Taskdb
+            var task = new Data.Entities.Task
             {
                 IsCompleted = taskRequest.IsCompleted,
                 Ts = DateTime.Now,

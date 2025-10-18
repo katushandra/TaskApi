@@ -1,7 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using TaskApi.Data.Entities;
+using TaskEntity = TaskApi.Data.Entities.Task;
 
 namespace TaskApi.Data;
 
@@ -17,9 +16,7 @@ public partial class TasksDbContext : DbContext
     }
 
     public virtual DbSet<RefreshToken> RefreshTokens { get; set; }
-
-    public virtual DbSet<Task> Tasks { get; set; }
-
+    public virtual DbSet<TaskEntity> Tasks { get; set; }
     public virtual DbSet<User> Users { get; set; }
     /*
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -55,7 +52,7 @@ public partial class TasksDbContext : DbContext
                 .HasConstraintName("refresh_token_user_id_fkey");
         });
 
-        modelBuilder.Entity<Task>(entity =>
+        modelBuilder.Entity<TaskEntity>(entity =>
         {
             entity.HasKey(e => e.Id).HasName("task_pkey");
 
